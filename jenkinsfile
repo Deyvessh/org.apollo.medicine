@@ -1,38 +1,37 @@
 pipeline {
     agent any
 
-    environment {
-        // Maven tool configured in Jenkins (Manage Jenkins → Global Tool Configuration)
-        MAVEN_HOME = tool 'maven-3.9.11'
+    tools {
+        // This must match the name in Jenkins -> Global Tool Configuration
+        maven 'maven-3.9.11'
+    }
 
+    environment {
         // Tomcat Deployment Info
-        DEPLOY_SERVER = 'http://209.38.122.119:8090/manager/text'   // Tomcat host
-        DEPLOY_USER   = 'deployer'                                  // Tomcat manager username
-        DEPLOY_PASS   = 'deployer'                                  // Tomcat manager password
-        DEPLOY_PATH   = 'medicine'                                  // Context path of app
+        DEPLOY_SERVER = 'http://209.38.122.119:8090/manager/text'
+        DEPLOY_USER   = 'deployer'       // Tomcat manager username
+        DEPLOY_PASS   = 'deployer'    // Tomcat manager password
+        DEPLOY_PATH   = 'medicine'    // App context path (URL will be ...:8090/medicine/)
     }
 
     stages {
         stage('Checkout from GitHub') {
             steps {
-                // Replace with your GitHub repo
-                git branch: 'main', url: 'https://github.com/Deyvessh/org.apollo.medicine.git'
+                git branch: 'main',
+                    url: 'https://github.com/Deyvessh/org.apollo.medicine.git',
+                    credentialsId: 'github_deyvessh'
             }
         }
 
         stage('Build with Maven') {
             steps {
-                withMaven(maven: "${MAVEN_HOME}") {
-                    sh 'mvn clean package -DskipTests'
-                }
+                sh 'mvn clean package -DskipTests'
             }
         }
 
         stage('Run Tests') {
             steps {
-                withMaven(maven: "${MAVEN_HOME}") {
-                    sh 'mvn test'
-                }
+                sh 'mvn test'
             }
             post {
                 always {
@@ -52,11 +51,10 @@ pipeline {
                 script {
                     def warFile = sh(script: "ls target/*.war", returnStdout: true).trim()
 
-                    // Deploy via Tomcat Manager API
                     sh """
                         curl -u ${DEPLOY_USER}:${DEPLOY_PASS} \
                         --upload-file ${warFile} \
-                        "${DEPLOY_SERVER}/manager/text/deploy?path=/${DEPLOY_PATH}&update=true"
+                        "${DEPLOY_SERVER}/deploy?path=/${DEPLOY_PATH}&update=true"
                     """
                 }
             }
@@ -68,10 +66,10 @@ pipeline {
             cleanWs()
         }
         success {
-            echo "✅ Successfully built & deployed to ${DEPLOY_SERVER}/${DEPLOY_PATH}"
+            echo "✅ Application deployed successfully: http://209.38.122.119:8090/${DEPLOY_PATH}/"
         }
         failure {
-            echo "❌ Build/Deploy failed. Check logs."
+            echo "❌ Build/Deploy failed. Check Jenkins logs."
         }
     }
 }
