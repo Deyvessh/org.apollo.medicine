@@ -36,7 +36,6 @@ pipeline {
                 always {
                     // FIX: Recursive search for test reports
                     junit '**/target/surefire-reports/*.xml'
-                    junit '**/target/failsafe-reports/*.xml'
                 }
             }
         }
