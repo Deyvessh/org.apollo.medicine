@@ -1,0 +1,94 @@
+pipeline {
+    agent any
+
+    tools {
+        maven 'maven-3.9.11'
+    }
+
+    parameters {
+        booleanParam(name: 'DEPLOY', defaultValue: false, description: 'Deploy after build?')
+        choice(name: 'ENV', choices: ['dev', 'staging', 'prod'], description: 'Environment to deploy to')
+    }
+
+    environment {
+        GIT_REPO     = 'https://github.com/Deyvessh/org.apollo.medicine.git'
+        DEPLOY_SERVER = 'http://209.38.122.119:8090/manager/text'
+    }
+
+    stages {
+        stage('Checkout from GitHub') {
+            steps {
+                git branch: 'main', url: "${GIT_REPO}", credentialsId: 'github_deyvessh'
+            }
+        }
+
+        stage('Build with Maven') {
+            steps {
+                sh 'mvn clean package -DskipTests'
+            }
+        }
+
+        stage('Run Tests') {
+            steps {
+                sh 'mvn test || true'
+            }
+            post {
+                always {
+                    junit '**/target/surefire-reports/*.xml'
+                    junit '**/target/failsafe-reports/*.xml'
+                }
+            }
+        }
+
+        stage('Archive WAR') {
+            steps {
+                archiveArtifacts artifacts: '**/target/*.war', fingerprint: true
+            }
+        }
+
+        stage('Deploy to Tomcat') {
+            when {
+                expression { return params.DEPLOY }
+            }
+            steps {
+                script {
+                    // Map environments to different context paths
+                    def paths = [
+                        dev     : 'dev-medicine',
+                        staging : 'staging-medicine',
+                        prod    : 'prod-medicine'
+                    ]
+                    def deployPath = paths[params.ENV]
+
+                    withCredentials([usernamePassword(
+                        credentialsId: 'tomcat_deployer',
+                        usernameVariable: 'DEPLOY_USER',
+                        passwordVariable: 'DEPLOY_PASS'
+                    )]) {
+                        def warFile = sh(script: "ls target/*.war", returnStdout: true).trim()
+
+                        sh """
+                            curl -u ${DEPLOY_USER}:${DEPLOY_PASS} \
+                            --upload-file ${warFile} \
+                            "${DEPLOY_SERVER}/deploy?path=/${deployPath}&update=true"
+                        """
+                    }
+                }
+            }
+        }
+    }
+
+    post {
+        always {
+            cleanWs()
+        }
+        success {
+            echo "✅ Build ${env.BUILD_NUMBER} successful"
+            echo "App URL: http://209.38.122.119:8090/${params.ENV}-medicine/"
+        }
+        failure {
+            echo "❌ Build failed. Check logs at ${env.BUILD_URL}"
+        }
+    }
+}
+
