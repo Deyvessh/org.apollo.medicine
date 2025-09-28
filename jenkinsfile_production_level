@@ -30,10 +30,11 @@ pipeline {
 
         stage('Run Tests') {
             steps {
-                sh 'mvn test || true'
+                sh 'mvn test'
             }
             post {
                 always {
+                    // FIX: Recursive search for test reports
                     junit '**/target/surefire-reports/*.xml'
                     junit '**/target/failsafe-reports/*.xml'
                 }
@@ -49,13 +50,11 @@ pipeline {
         stage('Deploy to Tomcat') {
             when {
                 expression {
-                    // Always deploy if ENV = dev
                     return params.ENV == 'dev' || params.DEPLOY
                 }
             }
             steps {
                 script {
-                    // Context path for each environment
                     def paths = [
                         dev     : 'dev-medicine',
                         staging : 'staging-medicine',
