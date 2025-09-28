@@ -1,17 +1,17 @@
 pipeline {
-    agent { label 'maven-build-server' }   // Always use this build server
+    agent { label 'maven-build-server' }
 
     tools {
         maven 'maven-3.9.11'
     }
 
     parameters {
-        booleanParam(name: 'DEPLOY', defaultValue: false, description: 'Deploy after build?')
+        booleanParam(name: 'DEPLOY', defaultValue: false, description: 'Deploy to environment?')
         choice(name: 'ENV', choices: ['dev', 'staging', 'prod'], description: 'Environment to deploy to')
     }
 
     environment {
-        GIT_REPO     = 'https://github.com/Deyvessh/org.apollo.medicine.git'
+        GIT_REPO      = 'https://github.com/Deyvessh/org.apollo.medicine.git'
         DEPLOY_SERVER = 'http://209.38.122.119:8090/manager/text'
     }
 
@@ -30,7 +30,13 @@ pipeline {
 
         stage('Run Tests') {
             steps {
-                 sh 'mvn test || true' // don’t fail pipeline if no tests
+                sh 'mvn test || true'
+            }
+            post {
+                always {
+                    junit '**/target/surefire-reports/*.xml'
+                    junit '**/target/failsafe-reports/*.xml'
+                }
             }
         }
 
@@ -42,11 +48,14 @@ pipeline {
 
         stage('Deploy to Tomcat') {
             when {
-                expression { return params.DEPLOY }
+                expression {
+                    // Always deploy if ENV = dev
+                    return params.ENV == 'dev' || params.DEPLOY
+                }
             }
             steps {
                 script {
-                    // Map environments to different context paths
+                    // Context path for each environment
                     def paths = [
                         dev     : 'dev-medicine',
                         staging : 'staging-medicine',
