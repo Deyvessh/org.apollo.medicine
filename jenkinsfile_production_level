@@ -62,7 +62,7 @@ pipeline {
                     def deployPath = paths[params.ENV]
 
                     withCredentials([usernamePassword(
-                        credentialsId: 'tomcat_deployer',
+                        credentialsId: 'tomcat',
                         usernameVariable: 'DEPLOY_USER',
                         passwordVariable: 'DEPLOY_PASS'
                     )]) {
