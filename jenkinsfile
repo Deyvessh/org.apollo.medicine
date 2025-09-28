@@ -1,32 +1,78 @@
 pipeline {
     agent any
 
-    stages {
-        stage ('Compile Stage') {
+    environment {
+        // Maven tool configured in Jenkins (Manage Jenkins → Global Tool Configuration)
+        MAVEN_HOME = tool 'maven-3.9.11'
 
+        // Tomcat Deployment Info
+        DEPLOY_SERVER = 'http://209.38.122.119:8090/manager/text'   // Tomcat host
+        DEPLOY_USER   = 'deployer'                                  // Tomcat manager username
+        DEPLOY_PASS   = 'deployer'                                  // Tomcat manager password
+        DEPLOY_PATH   = 'medicine'                                  // Context path of app
+    }
+
+    stages {
+        stage('Checkout from GitHub') {
             steps {
-                withMaven(maven : 'maven-3.9.11') {
-                    sh 'mvn clean compile'
+                // Replace with your GitHub repo
+                git branch: 'main', url: 'https://github.com/Deyvessh/org.apollo.medicine.git'
+            }
+        }
+
+        stage('Build with Maven') {
+            steps {
+                withMaven(maven: "${MAVEN_HOME}") {
+                    sh 'mvn clean package -DskipTests'
                 }
             }
         }
 
-        stage ('Testing Stage') {
-
+        stage('Run Tests') {
             steps {
-                withMaven(maven : 'maven-3.9.11') {
+                withMaven(maven: "${MAVEN_HOME}") {
                     sh 'mvn test'
                 }
             }
+            post {
+                always {
+                    junit 'target/surefire-reports/*.xml'
+                }
+            }
         }
 
-
-        stage ('Deployment Stage') {
+        stage('Archive WAR') {
             steps {
-                withMaven(maven : 'maven-3.9.11') {
-                    sh 'mvn deploy'
+                archiveArtifacts artifacts: 'target/*.war', fingerprint: true
+            }
+        }
+
+        stage('Deploy to Tomcat') {
+            steps {
+                script {
+                    def warFile = sh(script: "ls target/*.war", returnStdout: true).trim()
+
+                    // Deploy via Tomcat Manager API
+                    sh """
+                        curl -u ${DEPLOY_USER}:${DEPLOY_PASS} \
+                        --upload-file ${warFile} \
+                        "${DEPLOY_SERVER}/manager/text/deploy?path=/${DEPLOY_PATH}&update=true"
+                    """
                 }
             }
         }
     }
+
+    post {
+        always {
+            cleanWs()
+        }
+        success {
+            echo "✅ Successfully built & deployed to ${DEPLOY_SERVER}/${DEPLOY_PATH}"
+        }
+        failure {
+            echo "❌ Build/Deploy failed. Check logs."
+        }
+    }
 }
+
