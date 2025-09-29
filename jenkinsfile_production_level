@@ -6,7 +6,7 @@ pipeline {
     }
 
     parameters {
-        booleanParam(name: 'DEPLOY', defaultValue: false, description: 'Deploy to environment?')
+        booleanParam(name: 'DEPLOY', defaultValue: false, description: 'Deploy to environment? (Required for prod)')
         choice(name: 'ENV', choices: ['dev', 'staging', 'prod'], description: 'Environment to deploy to')
     }
 
@@ -34,7 +34,6 @@ pipeline {
             }
             post {
                 always {
-                    // FIX: Recursive search for test reports
                     junit '**/target/surefire-reports/*.xml'
                 }
             }
@@ -49,7 +48,9 @@ pipeline {
         stage('Deploy to Tomcat') {
             when {
                 expression {
-                    return params.ENV == 'staging' || params.DEPLOY
+                    // Auto-deploy for dev + staging
+                    // For prod → only if DEPLOY parameter is true
+                    return params.ENV in ['dev', 'staging'] || (params.ENV == 'prod' && params.DEPLOY)
                 }
             }
             steps {
