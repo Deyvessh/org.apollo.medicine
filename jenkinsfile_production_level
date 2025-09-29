@@ -49,7 +49,7 @@ pipeline {
         stage('Deploy to Tomcat') {
             when {
                 expression {
-                    return params.ENV == 'dev' || params.DEPLOY
+                    return params.ENV == 'staging' || params.DEPLOY
                 }
             }
             steps {
